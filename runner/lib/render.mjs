@@ -18,7 +18,7 @@ import { bagFontDir, systemFontDirs } from "./fonts.mjs";
  * fraction of pixels with any alpha. Throws on unparseable SVG — callers that
  * want a verdict instead of an exception wrap this.
  */
-export function renderSvg(svg, { width, background, bagDir } = {}) {
+export function renderSvg(svg, { width, background, bagDir, keepPixels = false } = {}) {
   const options = {
     font: {
       loadSystemFonts: true,
@@ -46,6 +46,8 @@ export function renderSvg(svg, { width, background, bagDir } = {}) {
     height: rendered.height,
     opaquePixels: opaque,
     coverage: total > 0 ? opaque / total : 0,
+    // RGBA buffer on request only — it is large and most callers need verdicts.
+    pixels: keepPixels ? pixels : undefined,
   };
 }
 

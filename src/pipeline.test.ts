@@ -86,6 +86,48 @@ describe("generate", () => {
   }, 90_000);
 });
 
+describe("variations", () => {
+  it("sweeps seeds into one labeled contact sheet", async () => {
+    const result = await runRunner(
+      "variations",
+      {
+        code: `export default ({ svg, width, height, random }) => {
+          svg.rect(width, height).fill("#202030");
+          svg.circle(random.range(20, 60)).center(random.range(0, width), random.range(0, height)).fill("#5ad");
+        }`,
+        seeds: [1, 2, 3, 4],
+        width: 120,
+        height: 120,
+        thumb: 64,
+      },
+      { timeoutMs: 120_000 },
+    );
+    expect(result.ok).toBe(true);
+    expect(result.sheetPath).toMatch(/sheet.*\.png$/);
+    expect((result.seeds as unknown[]).length).toBe(4);
+  }, 150_000);
+
+  it("a failing seed is reported, not silently omitted", async () => {
+    const result = await runRunner(
+      "variations",
+      {
+        code: `export default ({ svg, width, height, random }) => {
+          if (random.seed === 2) throw new Error("seed two dies");
+          svg.rect(width, height).fill("#202030");
+        }`,
+        seeds: [1, 2],
+        width: 100,
+        height: 100,
+        thumb: 64,
+      },
+      { timeoutMs: 120_000 },
+    );
+    expect(result.ok).toBe(false);
+    expect((result.failures as string[]).join()).toContain("seed 2");
+    expect(result.sheetPath).toBeDefined(); // the surviving seed still ships
+  }, 150_000);
+});
+
 describe("validate", () => {
   it("greens a good SVG", async () => {
     const result = await runRunner("validate", {

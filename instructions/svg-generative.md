@@ -512,3 +512,50 @@ for (let j = 0; j < rows; j++) for (let i = 0; i < cols; i++) {
 **Edge treatment — one binary decision per piece; mixed treatment looks like a bug.** Contain: reject/shrink anything crossing the frame; reads composed/object-like; keep placing elements *near* the edge to avoid center-hugging; inset by stroke-width/2 (ink extends half the stroke past geometry). Bleed: generate over a region 10–20% larger than the canvas, clip with `clip-path`; reads infinite/sample-of-a-system; elements must be genuinely cut, not suspiciously terminating at the border. Hybrid (most reliable): background bleeds full canvas, marks contained inside the margin — the "print" look.
 
 **Seeded reproducibility — non-negotiable discipline.** Same (code, seed) → same art, always. Every random draw goes through the seeded `random.*` / seeded noise — no `Math.random()`, ever, anywhere (one stray call breaks reproducibility silently); pass the seeded rng into noise construction too. Record the seed in the SVG (comment or `data-seed` attribute). **Explore by seed sweep, tune by parameter change:** render 10–20 seeds at fixed params to judge the parameter space — the piece is the space, not one lucky seed; if most seeds are bad, fix the params, don't cherry-pick. Change one parameter at a time at a fixed seed to see its effect. Derive per-subsystem seeds from the master seed (e.g. `hash(seed, "palette")`) so adding a draw in one subsystem doesn't reshuffle every other subsystem.
+
+## Plotter-quality line work
+
+The pen-plotter community's discipline produces the cleanest generative SVGs
+on screen too — it forbids everything that hides sloppy geometry.
+
+**What "plotter-ready" means** (and why it helps even for screen output):
+
+- **Stroke only, no fills.** Area coverage comes from hatching, stippling, or
+  line density. Fills hide overlapping/duplicate geometry; strokes expose it.
+- **One stroke width per layer/pen**; color = pen changes, so group paths by
+  color into one `<g stroke="...">` per pen.
+- **Polylines over disconnected segments.** A path that lifts the pen 500
+  times draws slowly and reads as fragmented; chain contiguous segments into
+  single subpaths.
+- **No duplicate/overlapping strokes** — a plotter draws them twice (wet,
+  dark, paper-tearing); on screen they alias darker. Dedupe segments that
+  coincide.
+- **Hidden-line removal, not layering.** Where a shape occludes another,
+  CLIP the occluded line geometry (polygon clipping via
+  `lib.polygonClipping.difference`) instead of painting an opaque fill over
+  it — the Joy Division technique generalized.
+
+**The vpype pipeline** (reference numbers from vpype's docs — the community
+standard for cleaning generated SVG; sole web-sourced figures in this file):
+process in this order, tolerances in real units for an A4-scale plot:
+
+1. `linemerge` — join path ends closer than **0.5 mm** into one polyline
+2. `linesimplify` — Douglas-Peucker at **0.1 mm** tolerance
+   (`lib.simplify(points, tol)` is the same algorithm)
+3. `reloop` — randomize closed-loop seam points, tolerance **0.03 mm**
+4. `filter --min-length 0.5mm` — drop dust segments
+5. `linesort` — order paths to minimize pen travel (irrelevant on screen,
+   free to skip)
+
+In this toolkit the equivalents are: merge polylines yourself while
+generating (chain, don't scatter), `lib.simplify` before emitting (tolerance
+≈ 0.05–0.2% of canvas size), and drop any polyline under ~0.5% of canvas
+size. Doing this in-generator beats post-processing.
+
+**Hatching as fill.** Fill a polygon with parallel lines at spacing 2–6×
+stroke width; clip the line family to the polygon (`lib.polygonClipping
+.intersection` on each line's thin rectangle, or scanline-intersect the
+polygon edges). Vary density by field value for shading; cross-hatch (two
+angles ~60–90° apart) for darker tone. Keep one hatch angle per shape —
+per-shape random angles read as texture, global constant angle reads as
+lighting.

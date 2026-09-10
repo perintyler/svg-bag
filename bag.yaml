@@ -16,6 +16,7 @@ tools:
 tool-metadata:
   - { toolName: status, namespace: svg, access: read }
   - { toolName: generate, namespace: svg, access: write }
+  - { toolName: variations, namespace: svg, access: write }
   - { toolName: render, namespace: svg, access: read }
   - { toolName: validate, namespace: svg, access: read }
   - { toolName: optimize, namespace: svg, access: write }

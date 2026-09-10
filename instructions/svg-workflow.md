@@ -20,8 +20,9 @@ The loop:
 2. **View the returned `pngPath`** (media `view_image`) — never ship an SVG
    you have not seen. Check `render.coverage` and `warnings` too: blank or
    near-blank renders are called out.
-3. Iterate: adjust the code, or sweep `seed` — same `(code, seed)` is
-   byte-identical, so a good seed is reproducible forever.
+3. Iterate: adjust the code, or sweep seeds with `variations` (N seeds → one
+   labeled contact-sheet PNG) — same `(code, seed)` is byte-identical, so a
+   good seed is reproducible forever.
 4. `optimize` before shipping; `validate` any SVG from elsewhere.
 
 Rules the toolkit enforces or expects:
@@ -34,9 +35,12 @@ Rules the toolkit enforces or expects:
   JetBrains Mono.
 - SVG.js setters silently coerce `NaN` to 0 — validate catches `NaN` only in
   raw markup, so guard your arithmetic where it happens.
-- `ctx.lib` carries d3 (`shape`, `scale`, `delaunay`, `hierarchy`), `Bezier`,
-  `culori` (OKLCH color), `polygonClipping`, `SvgPath`, `SVGPathCommander`,
+- `ctx.lib` carries d3 (`shape`, `scale`, `delaunay`, `hierarchy`), `dagre`
+  (DAG/flowchart layout — never eyeball node positions), `Bezier`, `culori`
+  (OKLCH color), `polygonClipping`, `SvgPath`, `SVGPathCommander`,
   `simplify`, `rough`. Bare imports of any bag dependency also work.
+- Rasterizer gotcha: emit colors as hex/rgb — resvg renders `oklch()` as
+  BLACK silently (verified). Compute in OKLCH, emit `culori.formatHex`.
 
 Craft references (get_instructions): `svg-craft` (coordinates, paths, paint,
 filters, text), `svg-generative` (flow fields, tiling, packing, palettes),

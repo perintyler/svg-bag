@@ -113,6 +113,44 @@ export const generate = defineTool({
       : `FAILED: ${r.error}${r.warnings?.length ? `\n${r.warnings.join("\n")}` : ""}${r.logs?.length ? `\nlogs:\n  ${r.logs.join("\n  ")}` : ""}`,
 });
 
+export const variations = defineTool({
+  namespace: "svg",
+  access: "write",
+  name: "variations",
+  description:
+    "Seed sweep: run one generation script across many seeds and get ONE labeled contact-sheet " +
+    "PNG back. The piece is the parameter space, not one lucky seed — judge the space in a " +
+    "single look, pick the winner, then call generate with that seed at full size. Same script " +
+    "contract as generate.",
+  schema: {
+    code: z.string().min(1).describe("ESM module source, same contract as generate"),
+    seeds: z.array(z.number().int()).optional().describe("Explicit seeds (max 25); default 1..count"),
+    count: z.number().int().min(2).max(25).optional().describe("How many seeds when seeds not given (default 9)"),
+    name: z.string().optional().describe("Slug for the sheet filename"),
+    width: z.number().int().min(1).max(16384).optional().describe("Full-size viewBox width (default 800)"),
+    height: z.number().int().min(1).max(16384).optional().describe("Full-size viewBox height (default 800)"),
+    params: z.string().optional().describe("JSON object of parameters, exposed parsed as ctx.params"),
+    thumb: z.number().int().min(64).max(640).optional().describe("Thumbnail width in the sheet (default 320)"),
+    columns: z.number().int().min(1).max(8).optional().describe("Sheet columns (default: near-square)"),
+    timeoutMs: z.number().int().min(1000).max(300_000).optional().describe("Total time budget (default 120s)"),
+  },
+  handler: async ({ timeoutMs, params, ...options }) => {
+    let parsedParams: unknown;
+    if (params) {
+      try {
+        parsedParams = JSON.parse(params);
+      } catch {
+        return { ok: false, error: "params is not valid JSON" };
+      }
+    }
+    return runRunner("variations", { ...options, params: parsedParams }, { timeoutMs: timeoutMs ?? 120_000 });
+  },
+  cliFormat: (r: any) =>
+    r.ok || r.sheetPath
+      ? `${r.sheetPath}\n${(r.seeds ?? []).map((s: any) => `seed ${s.seed}: coverage ${s.coverage}${s.valid ? "" : " INVALID"}`).join("\n")}${r.failures?.length ? `\nfailures:\n  ${r.failures.join("\n  ")}` : ""}`
+      : `FAILED: ${r.error}`,
+});
+
 export const render = defineTool({
   namespace: "svg",
   access: "read",

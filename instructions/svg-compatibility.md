@@ -130,9 +130,12 @@ Renderer-matrix claims tagged **[verify]** are unverified — test empirically.
 - Media queries (prefers-color-scheme) inside SVG `<style>` evaluate in `<img>` context in modern browsers — usable for auto dark-mode icons (prefers-reduced-motion verified; color-scheme [verify]).
 - mix-blend-mode / isolation: fine in browsers, unreliable in rasterizers [verify resvg/librsvg]; avoid in portable files or ship a flattened fallback.
 
-### Renderer matrix [verify ALL empirically]
+### Renderer matrix
 
-- **resvg**: excellent static SVG 1.1 — filters (most primitives), masks, clips, patterns, markers, basic `<style>` CSS; no SMIL, no scripting, no foreignObject; fonts via system lookup/provided files [verify feImage, lighting, blend isolation].
+- **resvg 2.6.2 — VERIFIED empirically** (this bag's own rasterizer; battery: `research/resvg-battery.mjs`, 2026-09-10):
+  - **Works**: CSS in `<style>` (class selectors), linear/radial gradients incl. `href` stop-inheritance, `<pattern>`, clip-path, luminance masks, feGaussianBlur, feDropShadow, feTurbulence, feDisplacementMap, `<text>` (with fontDirs) and `<textPath>`, `currentColor`, `paint-order`, `<marker orient="auto-start-reverse">`, `<use>` via both `href` and `xlink:href`, `fill-rule="evenodd"`, nested `<svg>`, stroke-dasharray. SMIL elements: ignored, the BASE value renders (element kept) — static-first authoring works as designed.
+  - **Does NOT work**: `oklch()` (and modern CSS color functions) as paint — **falls back to BLACK silently**, so always emit hex/rgb (compute OKLCH via `lib.culori.formatHex`); CSS custom properties `var()`; CSS `transform` in a `style` attribute (use the transform *attribute*); `vector-effect="non-scaling-stroke"` (stroke scales with the group — bake stroke widths instead).
+  - The first battery run misread feGaussianBlur/feDisplacementMap as unsupported because the probe pixels fell outside the **default -10%/120% filter region** — the region trap is real in resvg exactly as in browsers; always widen filter regions.
 - **librsvg** (rsvg-convert, sharp): good shapes/gradients/masks/clips/filters in modern releases (2.50+ Rust filters); limited CSS; no SMIL; dominant-baseline historically weak [verify].
 - **ImageMagick**: delegates to librsvg when available; otherwise its internal MSVG parser (no filters, no masks, barely CSS). Never target MSVG.
 - **Inkscape**: near-browser SVG 1.1; its inkscape: namespace extensions are ignorable.
@@ -177,9 +180,11 @@ Renderer-matrix claims tagged **[verify]** are unverified — test empirically.
 
 ### Rasterizers (resvg / librsvg / sharp / ImageMagick)
 
-- No SMIL, no CSS animation, no foreignObject, no external `<use>`.
-- Prefer presentation attributes over `<style>`; emit both href and xlink:href for older librsvg [verify versions].
-- Avoid dominant-baseline (use dy="0.35em"); avoid mix-blend-mode; test feDropShadow [verify].
+- No SMIL, no CSS animation, no foreignObject, no external `<use>` (resvg verified: SMIL ignored, base values render).
+- Prefer presentation attributes over `<style>` for maximum portability (resvg itself DOES honor `<style>` class selectors — verified); emit both href and xlink:href for older librsvg [verify versions] (resvg verified: both work).
+- Avoid dominant-baseline (use dy="0.35em"); avoid mix-blend-mode; feDropShadow verified working in resvg 2.6.2.
+- **Colors as hex/rgb only** — resvg renders `oklch()` as BLACK with no error, and ignores `var()`. Compute fancy color in code (`lib.culori.formatHex`), emit plain values.
+- CSS `transform` in style attributes is ignored by resvg — use the `transform` attribute. `vector-effect="non-scaling-stroke"` is ignored too.
 - Text→paths unless the render host demonstrably has the font.
 
 ### Figma / design-tool import

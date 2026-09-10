@@ -57,11 +57,14 @@ before claiming exact conformance.
 
 ## Diagrams and flowcharts
 
-- **Layout is a graph problem — do not eyeball it.** For DAGs/flowcharts,
-  compute layers (longest-path or Sugiyama-style): assign ranks, order
-  within ranks to minimize crossings, then place. For small diagrams a
-  simple grid with fixed column/row pitch beats freeform placement every
-  time.
+- **Layout is a graph problem — do not eyeball it.** For DAGs/flowcharts use
+  `ctx.lib.dagre` (Sugiyama-style: ranks, crossing minimization, placement):
+  `const g = new lib.dagre.graphlib.Graph(); g.setGraph({rankdir: "TB",
+  nodesep: 24, ranksep: 48}); g.setDefaultEdgeLabel(() => ({}));
+  g.setNode("a", {width, height}); g.setEdge("a", "b"); lib.dagre.layout(g);`
+  then read `g.node(id).x/.y` (centers) and `g.edge(a,b).points` for
+  polyline routes. For small diagrams a simple grid with fixed column/row
+  pitch also works.
 - Spacing constants that read well: node padding 12–16px, sibling gap ≥ 24px,
   rank gap ≥ 48px, lane gutters ≥ 32px. Uniform pitch matters more than the
   exact number.

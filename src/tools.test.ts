@@ -40,7 +40,7 @@ describe("tool shape", () => {
   });
 
   it("read tools never write, by declaration", () => {
-    const writers = new Set(["generate", "optimize"]);
+    const writers = new Set(["generate", "variations", "optimize"]);
     for (const tool of exportedTools()) {
       expect(tool.access).toBe(writers.has(tool.name) ? "write" : "read");
     }

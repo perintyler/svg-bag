@@ -35,7 +35,7 @@ export interface RunnerResult {
 }
 
 export async function runRunner(
-  script: "run" | "render" | "validate" | "optimize" | "textpath" | "fonts" | "probe",
+  script: "run" | "variations" | "render" | "validate" | "optimize" | "textpath" | "fonts" | "probe",
   options: Record<string, unknown>,
   { timeoutMs = DEFAULT_TIMEOUT_MS }: { timeoutMs?: number } = {},
 ): Promise<RunnerResult> {

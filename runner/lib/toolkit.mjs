@@ -16,6 +16,7 @@ import * as d3scale from "d3-scale";
 import * as d3delaunay from "d3-delaunay";
 import * as d3hierarchy from "d3-hierarchy";
 import polygonClipping from "polygon-clipping";
+import dagre from "@dagrejs/dagre";
 import simplify from "simplify-js";
 import SvgPath from "svgpath";
 import SVGPathCommander from "svg-path-commander";
@@ -60,6 +61,13 @@ export function buildContext({ width, height, seed, params, bagDir }) {
       hierarchy: d3hierarchy,
       /** Boolean ops on polygons: union/intersection/difference/xor. */
       polygonClipping,
+      /**
+       * DAG/flowchart layout — never eyeball node positions:
+       * const g = new lib.dagre.graphlib.Graph(); g.setGraph({rankdir:"TB", nodesep:24, ranksep:48});
+       * g.setDefaultEdgeLabel(() => ({})); g.setNode("a", {width:120, height:40}); g.setEdge("a","b");
+       * lib.dagre.layout(g); → g.node("a").x/.y (centers), g.edge("a","b").points.
+       */
+      dagre,
       /** Cubic/quadratic bézier math: new Bezier(...).get(t)/.split()/.offset(). */
       Bezier,
       /** Color: culori.formatHex(culori.oklch({l,c,h})), interpolate, mix... */
