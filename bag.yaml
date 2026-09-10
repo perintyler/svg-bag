@@ -1,0 +1,28 @@
+version: v0.1
+name: svg
+description: >-
+  Programmatic SVG generation engine — SVG.js + svgdom with a curated toolkit
+  (d3, noise, rough, bézier, boolean ops), seeded randomness, text-to-path with
+  real font metrics, resvg rasterization for a closed see-what-you-made loop,
+  validation that actually fails on broken output, and shipped expertise on the
+  craft of SVG.
+
+tools:
+  entry: tools.ts
+
+# Namespace matches the bag name, so the fallback would be correct anyway —
+# but declared metadata is deterministic where introspection of a stale build
+# is not (auto-traits.ts, ownNamespaces).
+tool-metadata:
+  - { toolName: status, namespace: svg, access: read }
+  - { toolName: generate, namespace: svg, access: write }
+  - { toolName: render, namespace: svg, access: read }
+  - { toolName: validate, namespace: svg, access: read }
+  - { toolName: optimize, namespace: svg, access: write }
+  - { toolName: text_to_path, namespace: svg, access: read }
+  - { toolName: fonts, namespace: svg, access: read }
+
+dependencies:
+  - name: node
+    install: brew install node
+    reason: runner scripts execute in a child node process from the bag directory

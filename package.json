@@ -1,0 +1,37 @@
+{
+  "name": "@barry-bags/svg",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@barry-rocks/tools": "link:../../barry/packages/tools",
+    "@rgrove/parse-xml": "5.0.0",
+    "@resvg/resvg-js": "2.6.2",
+    "@svgdotjs/svg.js": "3.2.8",
+    "bezier-js": "6.1.4",
+    "culori": "4.0.2",
+    "d3-delaunay": "6.0.4",
+    "d3-hierarchy": "3.1.2",
+    "d3-scale": "4.0.2",
+    "d3-shape": "3.2.0",
+    "fontkit": "2.0.4",
+    "polygon-clipping": "0.15.7",
+    "roughjs": "4.6.6",
+    "simplex-noise": "4.0.3",
+    "simplify-js": "1.2.4",
+    "svg-path-commander": "2.3.3",
+    "svgdom": "0.1.29",
+    "svgo": "4.1.0",
+    "svgpath": "2.6.0",
+    "zod": "3.25.76"
+  },
+  "devDependencies": {
+    "@types/node": "22.15.0",
+    "tsx": "4.23.12",
+    "typescript": "5.9.3",
+    "vitest": "4.1.0"
+  },
+  "scripts": {
+    "test": "vitest run"
+  }
+}

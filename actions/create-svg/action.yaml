@@ -1,0 +1,36 @@
+version: 1
+name: create-svg
+description: >-
+  Create an SVG (art, icon, logo, diagram, chart, illustration) through the
+  full generate→see→iterate loop: plan against the right craft instructions,
+  write a toolkit script, render and LOOK at it, refine, then optimize and
+  deliver. Use whenever an SVG deliverable is the goal, not just a quick shape.
+prompt:
+  format: file
+  path: create-svg.md
+context: none
+requires:
+  tools:
+    - generate
+    - render
+    - validate
+    - optimize
+input_schema:
+  type: object
+  properties:
+    brief:
+      type: string
+      description: What to create — subject, purpose, mood, constraints.
+    kind:
+      type: string
+      description: "One of: art, icon, logo, diagram, chart, illustration (guides which instructions to load)."
+    size:
+      type: string
+      description: "viewBox size, e.g. 800x800 (default) or 24x24 for icons."
+  required: [brief]
+output_schema:
+  type: string
+  description: >-
+    Paths to the final .svg (optimized) and .png preview, the seed and code
+    that produced them, and what was verified (validation verdict, coverage,
+    visual check notes).
