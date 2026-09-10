@@ -9,29 +9,15 @@ mode: on-demand
 
 # Generative SVG Techniques
 
-A generative piece is a parameter space, not an image. Build a space where most
-seeds are good. Palette: constrain hue, structure value, ration the accent.
-Composition: fix the margin, place a focal point off-center, vary density,
-largest shapes first. Randomness: seed it, shape its distribution, clamp its
-tails. Every technique below emits polylines/paths; single-stroke, fill-free
-output also produces the best screen SVGs.
+A generative piece is a parameter space, not an image. Build a space where most seeds are good. Palette: constrain hue, structure value, ration the accent. Composition: fix the margin, place a focal point off-center, vary density, largest shapes first. Randomness: seed it, shape its distribution, clamp its tails. Every technique below emits polylines/paths; single-stroke, fill-free output also produces the best screen SVGs.
 
-Conventions in this file: `random.range(a,b)`, `random.int(a,b)`,
-`random.gaussian(mean, sd)`, `random.choice(arr)` are the seeded RNG.
-`noise2D(x,y)` returns values in **[-1, 1]** — remap with `(noise2D(x,y)+1)/2`
-when you need [0,1]. Delaunay/Voronoi via `lib.delaunay.Delaunay.from(points)`.
-d3-shape curve generators via `lib.shape`. Claims the source could not confirm
-are tagged [unverified].
+Conventions: `random.range(a,b)` / `random.int(a,b)` / `random.gaussian(mean,sd)` / `random.choice(arr)` are the seeded RNG. `noise2D(x,y)` returns **[-1, 1]** — remap with `(noise2D(x,y)+1)/2` for [0,1]. Delaunay/Voronoi via `lib.delaunay.Delaunay.from(points)`; d3-shape curves via `lib.shape`. Unconfirmed claims are tagged [unverified].
 
 ---
 
 ## 1. Flow fields
 
-Hair-like, sinuous bundles of near-parallel strokes that swirl and converge —
-the signature contemporary generative look (Tyler Hobbs / *Fidenza* lineage
-[unverified] attribution detail). A grid of precomputed angles covering an area
-LARGER than the canvas; particles trace through it by stepping in the local
-angle.
+Hair-like, sinuous bundles of near-parallel strokes that swirl and converge — the signature contemporary generative look (Tyler Hobbs / *Fidenza* lineage [unverified] attribution detail). A grid of precomputed angles covering an area LARGER than the canvas; particles trace by stepping in the local angle.
 
 ```js
 // 1. Angle grid — extend 20-50% beyond the canvas so curves bleed cleanly
@@ -39,9 +25,8 @@ const res = W / 100;                          // cell size ~1% of canvas width
 const cols = Math.ceil(gen.w / res), rows = Math.ceil(gen.h / res);
 const grid = [];
 for (let j = 0; j < rows; j++) for (let i = 0; i < cols; i++) {
-  // (a) noise: smooth organic swirls  (noise2D in [-1,1] → angles span ±π·curl)
-  grid[j*cols+i] = noise2D(i * nf, j * nf) * Math.PI * curl;
-  // (b) or geometric: angle = (j/rows) * Math.PI   (non-noise variant)
+  grid[j*cols+i] = noise2D(i * nf, j * nf) * Math.PI * curl;  // smooth swirls
+  // or geometric, no noise: angle = (j/rows) * Math.PI
 }
 // 2. Trace a particle
 function trace(x, y, steps, stepLen) {
@@ -57,34 +42,21 @@ function trace(x, y, steps, stepLen) {
 }
 ```
 
-Params: cell `res` ~1% of canvas width; noise frequency `nf` 0.05–0.2 per cell
-(lower = broader sweeps); `curl` 0.5 (calm) to 2+ (chaotic multi-turn); step
-length 1–5px and **must be ≤ cell size** or curves polygonize; steps 50–500;
-line count 200–2000.
+Params: cell `res` ~1% of canvas width; noise frequency `nf` 0.05–0.2 per cell (lower = broader sweeps); `curl` 0.5 (calm) to 2+ (chaotic); step length 1–5px, **must be ≤ cell size** or curves polygonize; steps 50–500; 200–2000 lines.
 
 Quality moves ([unverified] as Hobbs' exact prescriptions):
-- **Start points matter more than the field.** Poisson-disc starts (§7) for
-  even coverage; clustered/edge starts for composition.
-- Vary width and length by a second noise field or distance from a focal
-  point; power-law lengths beat uniform.
-- **Collision-aware variant:** keep a spatial hash of drawn points; stop a
-  trace within distance `d` of an existing line → evenly spaced, non-crossing
-  "topographic" bundles (evenly-spaced streamlines, Jobard & Lefer
-  [unverified] attribution).
-- Trace from each seed both directions to center strokes on their seeds.
+- **Start points matter more than the field.** Poisson-disc starts (§7) for even coverage; clustered/edge starts for composition.
+- Vary width and length by a second noise field or distance from a focal point; power-law lengths beat uniform.
+- **Collision-aware variant:** keep a spatial hash of drawn points; stop a trace within distance `d` of an existing line → evenly spaced, non-crossing "topographic" bundles (evenly-spaced streamlines, Jobard & Lefer [unverified] attribution).
+- Trace from each seed in both directions to center strokes on their seeds.
 
-Failure modes: step > cell (jagged); field too high-frequency (scribble);
-uniform starts + uniform length (reads as fur); no extended generation area
-(lines visibly die at the canvas edge).
+Failure modes: step > cell (jagged); field too high-frequency (scribble); uniform starts + uniform length (reads as fur); no extended field area (lines visibly die at the canvas edge).
 
-Composition tip: bias trace length and stroke weight toward one off-center
-focal point with a gaussian falloff — uniform coverage reads as texture, not a
-piece.
+Composition tip: bias trace length and stroke weight toward one off-center focal point with gaussian falloff — uniform coverage reads as texture, not a piece.
 
 ## 2. Noise-displaced lines (Joy Division)
 
-Stacked horizontal lines with a mountain-range bulge — the *Unknown Pleasures*
-look. Each row is a polyline displaced upward by enveloped randomness.
+Stacked horizontal lines with a mountain-range bulge — the *Unknown Pleasures* look. Each row is a polyline displaced upward by enveloped randomness.
 
 ```js
 const rows = 40, my = 0.15 * H, mx = 0.1 * W, maxAmp = H / 8;
@@ -94,27 +66,20 @@ for (let j = 0; j < rows; j++) {
   for (let i = 0; i <= 60; i++) {
     const x = mx + (i/60) * (W - 2*mx);
     const env = Math.max(0, Math.sin(Math.PI * i/60)) ** 3;  // bulge center, flat edges
-    const amp = env * maxAmp;
-    const d = -Math.abs(random.gaussian(0, amp));            // displace upward only
+    const d = -Math.abs(random.gaussian(0, env * maxAmp));   // displace upward only
     pts.push([x, y0 + d * ((noise2D(i*0.15, j*0.4)+1)/2 * 0.5 + 0.5)]);
   }
-  emit(smoothPath(pts));                                     // Catmull-Rom or Chaikin (§10)
+  emit(smoothPath(pts));                       // Catmull-Rom or Chaikin (§10)
 }
 ```
 
-Key craft: draw rows **back-to-front (top row first)** and give each line an
-opaque fill in the background color below its curve — that hidden-line
-occlusion makes peaks overlap like ridges. Params: rows 30–60; envelope
-exponent 2–4; `maxAmp` H/10–H/5, and ≤ ~3× row spacing or ridges tangle.
+Key craft: draw rows **back-to-front (top first)** and give each line an opaque fill in the background color below its curve — that hidden-line occlusion makes peaks overlap like ridges. Params: rows 30–60; envelope exponent 2–4; `maxAmp` H/10–H/5 and ≤ ~3× row spacing or ridges tangle.
 
-Composition tip: the envelope IS the composition — try an off-center or
-double-peaked envelope instead of the symmetric sine.
+Composition tip: the envelope IS the composition — try an off-center or double-peaked envelope instead of the symmetric sine.
 
 ## 3. Domain warping
 
-Marbled, folded, fluid distortion — noise fed through itself
-(`f(p) = noise(p + a·noise(p + b·noise(p)))`; Inigo Quilez's formulation is the
-common reference [unverified] exact constants).
+Marbled, folded, fluid distortion — noise fed through itself: `f(p) = noise(p + a·noise(p + b·noise(p)))` (Inigo Quilez's formulation is the common reference [unverified] exact constants).
 
 ```js
 function warped(x, y) {
@@ -125,23 +90,13 @@ function warped(x, y) {
 }
 ```
 
-`a` (warp strength) 1–4; one warp level = gentle bend, two = full marbling. The
-offsets (5.2, 1.3, …) just decorrelate channels — any constants work. Use it
-anywhere a plain noise field feeds geometry: warp contour fields, flow-field
-angles, or point positions directly (`x' = x + A*noise2D(...)`, A = 5–15% of
-canvas).
+`a` (warp strength) 1–4; one warp level = gentle bend, two = full marbling. The offsets (5.2, 1.3, …) just decorrelate channels — any constants work. Use anywhere a plain noise field feeds geometry: warp contour fields, flow-field angles, or point positions directly (`x' = x + A*noise2D(...)`, A = 5–15% of canvas).
 
-Composition tip: warped fields make the best terrain contours — sample the
-warped field into a grid, extract 8–25 iso-levels with marching squares
-(d3: `lib.shape`-adjacent `d3.contours` if available, else hand-rolled), one
-closed polyline per contour.
+Composition tip: warped fields make the best terrain contours — sample into a grid, extract 8–25 evenly spaced iso-levels with marching squares, one closed polyline per contour, drop tiny loops. A radial falloff subtracted from the field (`field -= (r/R)^2`) turns edge noise into an island.
 
 ## 4. Truchet tiles
 
-A square grid where each cell holds one of a few rotations of a motif; because
-motifs meet edges **exactly at midpoints**, random rotations still produce
-continuous winding paths — mazes (diagonal variant) or interlocking loops (arc
-variant).
+Each grid cell holds one of a few rotations of a motif; because motifs meet edges **exactly at midpoints**, random rotations still produce continuous winding paths — mazes (diagonal variant) or smooth interlocking loops (arc variant).
 
 ```js
 for (let j = 0; j < rows; j++) for (let i = 0; i < cols; i++) {
@@ -154,35 +109,17 @@ for (let j = 0; j < rows; j++) for (let i = 0; i < cols; i++) {
 }
 ```
 
-The invariant: every tile touches each edge at its midpoint — any tile set
-sharing that boundary condition mixes freely. Extensions: bias `v` by a noise
-field (ordered regions emerge); double/triple concentric arcs per corner for
-woven density; weave over/under by breaking one arc where two cross
-[unverified] as a named standard technique.
+Any tile set sharing the midpoint boundary condition mixes freely. Extensions: bias `v` by a noise field (ordered regions emerge); double/triple concentric arcs per corner for woven density; weave over/under by breaking one arc where two cross [unverified] as a named standard technique.
 
-**Multi-scale Truchet** (Christopher Carlson [unverified] attribution;
-presented at Bridges ~2018): tiles may subdivide into 2×2 children at half
-scale; continuity across a scale boundary needs arcs meeting edge midpoints
-**plus** corner circles/edge caps so one full-size edge contact matches two
-half-size contacts at 1/4 and 3/4. Recipe: subdivide cells with probability
-`p(depth) ≈ 0.5^depth`, stop at depth 3–4, render leaves with arc pairs +
-corner dots + caps sized proportionally to the cell. [unverified]: his exact
-primitive inventory.
+**Multi-scale Truchet** (Christopher Carlson [unverified] attribution; presented at Bridges ~2018): recursively subdivide cells into 2×2 children with probability `p(depth) ≈ 0.5^depth`, stop at depth 3–4. Continuity across a scale boundary needs arcs at edge midpoints **plus** small corner circles/edge caps so one full-size edge contact matches two half-size contacts at 1/4 and 3/4; size the primitives proportionally to the cell. [unverified]: his exact primitive inventory.
 
-Related — **Wang tiles** generalize truchet (truchet = Wang tiles where all
-edges share one color): tiles carry edge colors, adjacent edges must match;
-scanline placement filtering the tile set by the north/west neighbors' colors.
-Guarantee no dead ends by covering every (north-color, west-color) pair with at
-least one tile.
+**Wang tiles** generalize truchet (truchet = Wang tiles where all edges share one color): tiles carry edge colors; adjacent edges must match. Scanline placement: filter the tile set by the north and west neighbors' colors, pick randomly among survivors; guarantee no dead ends by covering every (north-color, west-color) pair with at least one tile. Draw each tile's interior so strokes terminate at edge positions determined solely by that edge's color — continuity is then automatic.
 
-Composition tip: a noise-biased `v` plus a second color for one of the two
-motifs turns texture into regions — pure 50/50 randomness is the least
-interesting setting.
+Composition tip: noise-biased `v` plus a second color for one of the two motifs turns texture into regions — pure 50/50 randomness is the least interesting setting.
 
 ## 5. Recursive subdivision
 
-**Quadtree.** Subdivide squares with depth-decreasing probability; render
-leaves. Driving `p` by a spatial field is what turns texture into composition.
+**Quadtree.** Subdivide squares with depth-decreasing probability; render leaves. Driving `p` spatially is what turns texture into composition.
 
 ```js
 function quad(x, y, s, depth) {
@@ -195,16 +132,9 @@ function quad(x, y, s, depth) {
 }
 ```
 
-**Mondrian.** Recursive rect splitting with anti-sliver rules: split the long
-way, split at 35–65% (never near an edge), stop by `minSize`/`maxDepth`/
-`stopP` 0.1–0.25. Color mostly near-neutral leaves; primaries on ~15–25%;
-heavy borders (stroke ~1–2% of canvas).
+**Mondrian.** Recursive rect splitting with anti-sliver rules: split the long side; split at 35–65% (never near an edge); stop by minSize / maxDepth / `stopP` 0.1–0.25. Color mostly near-neutral leaves, primaries on ~15–25%, heavy borders (stroke ~1–2% of canvas).
 
-**Triangle subdivision** (Tyler Hobbs' "aesthetically pleasing triangle
-subdivision" essay; specifics reproduced from memory [unverified]): (a) always
-split the **longest edge** — the anti-sliver rule; (b) split at a randomized
-point away from the midpoint; (c) stop by area/depth, optionally modulated
-spatially.
+**Triangle subdivision** (Tyler Hobbs' "aesthetically pleasing triangle subdivision" essay; specifics reproduced from memory [unverified]): (a) always split the **longest edge** — the anti-sliver rule; (b) split at a randomized point away from the midpoint; (c) stop by area/depth, optionally modulated spatially.
 
 ```js
 function splitTri(t, depth) {
@@ -216,14 +146,11 @@ function splitTri(t, depth) {
 }
 ```
 
-Start from 2–4 big triangles covering the frame. Composition tip: color by
-depth ladder + per-leaf OKLCH jitter (§14) — deeper = darker + thinner stroke
-is the most reliable recursive look.
+Start from 2–4 big triangles covering the frame. Composition tip: deeper = darker + thinner stroke is the most reliable recursive look — value structure and scale structure agree; accent only at leaves (p ≈ 0.12).
 
 ## 6. Circle packing
 
-Organic clusters of tangent-but-not-overlapping circles; the **size hierarchy**
-does the aesthetic work.
+Organic clusters of tangent-but-not-overlapping circles; the **size hierarchy** does the aesthetic work.
 
 ```js
 const circles = [];
@@ -235,29 +162,18 @@ for (let tries = 0; tries < MAX_TRIES && circles.length < N; tries++) {
     if (Math.hypot(x - c.x, y - c.y) < r + c.r + pad) { ok = false; break; }
   if (ok) circles.push({x, y, r});
 }
-// powerLaw: rMin * Math.pow(random.range(0,1), exp) scaled to [rMin,rMax]-ish;
-// or draw radii descending and place big ones first while space exists.
+// Or draw radii descending and place big ones first while space exists.
+// Grow variant: place collision-free at rMin, then r += dr until touching a
+// neighbor or rMax — packs much tighter, circles kiss.
 ```
 
-**Grow-until-collision variant:** place a collision-free point at `rMin`, then
-`r += dr` each step until it touches a neighbor or hits `rMax` — packs much
-tighter, circles kiss.
+Params: `pad` 0–2px (0 = tangent look); `rMax/rMin` ratio 10–50× for hierarchy; MAX_TRIES 10k–500k (acceptance collapses as the canvas fills — that's normal; stop after ~2000 consecutive failures). Spatial hash with cell ≈ 2·rMax is mandatory past ~1k circles. Variants: pack inside a polygon mask (reject outside centers, or clamp r to distance-to-boundary); nested packing inside big circles; size by field value.
 
-Params: `pad` 0–2px (0 = tangent look); `rMax/rMin` ratio 10–50× for
-hierarchy; MAX_TRIES 10k–500k (acceptance collapses as the canvas fills —
-normal; stop after ~2000 consecutive failures). Spatial hash with cell ≈
-2·rMax is mandatory past ~1k circles. Variants: pack inside a polygon mask
-(reject outside centers, or clamp r to distance-to-boundary); nested packing
-inside big circles; size by field value.
-
-Composition tip: cluster the largest circles near a focal third-point and let
-smalls fill outward — uniform size + uniform placement is the classic dud.
+Composition tip: cluster the largest circles near a focal third-point and let smalls fill outward — uniform size + uniform placement is the classic dud.
 
 ## 7. Poisson-disc sampling (Bridson 2007)
 
-Uniform-feeling points with a guaranteed minimum distance `r` — blue noise in
-O(n). The default distribution for stipples, flow-field seeds, tree
-attractors, anything that should look "naturally distributed."
+Uniform-feeling points with guaranteed minimum distance `r` — blue noise in O(n). The default distribution for stipples, flow-field seeds, tree attractors, anything that should look "naturally distributed."
 
 ```js
 function poissonDisc(W, H, r, k = 30) {                // k=30 is Bridson's default
@@ -290,21 +206,13 @@ function poissonDisc(W, H, r, k = 30) {                // k=30 is Bridson's defa
 }
 ```
 
-Variable-density version: make `r` a function `radiusAt(x,y)` driven by a
-noise/image field — density variation with locally even spacing, the best of
-both worlds and the right answer for §16's density-variation rule.
+Variable-density version: make `r` a function `radiusAt(x,y)` driven by a noise/image field — density variation with locally even spacing, the right answer for §15's density rule.
 
-When each distribution looks right: **white noise** (pure `random.range`)
-clumps and voids — use only when "scattered carelessly" IS the aesthetic;
-**jittered grid** (`(i + 0.5 + random.range(-0.5,0.5)*jit) * cell`, jit
-0.5–0.8) is a cheap blue-noise substitute; **poisson-disc** for things (trees,
-dots, seeds); **Lloyd relaxation** (§9) 1–2 iterations de-clumps white noise,
-10+ looks manufactured.
+When each distribution looks right: **white noise** (pure `random.range`) clumps and voids — use only when "scattered carelessly" IS the aesthetic; **jittered grid** (`(i + 0.5 + random.range(-0.5, 0.5)*jit) * cell`, jit 0.5–0.8 even-but-organic, <0.3 visible grid) is a cheap substitute; **poisson-disc** for things (trees, dots, seeds); **Lloyd relaxation** (§9) — 1–2 iterations de-clump white noise while keeping character, 10+ looks manufactured. If points represent accidents (splatter, stars — real stars cluster), white or clustered noise is correct.
 
 ## 8. L-systems + turtle
 
-Deterministic self-similar line work — space-filling mazes, crystalline
-coastlines, ferns and bushes. Every stroke is a continuous turtle path.
+Deterministic self-similar line work — space-filling mazes, crystalline coastlines, ferns and bushes. Every stroke is a continuous turtle path.
 
 ```js
 function expand(axiom, rules, iters) {
@@ -345,16 +253,15 @@ function turtle(str, {angle, step, startAngle = -90}) {
 }
 ```
 
-Classic rulesets (*Algorithmic Beauty of Plants* family — stable and widely
-reproduced, but [unverified] verbatim; the draw convention column is the top
-source of "curve comes out wrong"):
+Classic rulesets (*Algorithmic Beauty of Plants* family — stable and widely reproduced but [unverified] verbatim; the draw-convention column is the top source of "curve comes out wrong"):
 
 | Name | Axiom | Rules | Angle | Iters | Draw convention |
 |---|---|---|---|---|---|
 | Koch quadratic | `F` | `F → F+F-F-F+F` | 90° | 3–5 | F draws |
 | Koch snowflake | `F--F--F` | `F → F+F--F+F` | 60° | 3–5 | F draws |
 | Dragon curve | `FX` | `X → X+YF+`, `Y → -FX-Y` | 90° | 10–16 | X,Y non-drawing |
-| Sierpinski arrowhead | `A` | `A → B-A-B`, `B → A+B+A` | 60° | 6–9 | A,B BOTH draw |
+| Sierpinski arrowhead (single stroke) | `A` | `A → B-A-B`, `B → A+B+A` | 60° | 6–9 | A,B BOTH draw |
+| Sierpinski triangle | `F-G-G` | `F → F-G+F+G-F`, `G → GG` | 120° | 4–7 | F,G both draw |
 | Hilbert | `A` | `A → +BF-AFA-FB+`, `B → -AF+BFB+FA-` | 90° | 4–7 | only F draws |
 | Fern (canonical) | `X` | `X → F+[[X]-X]-F[-FX]+X`, `F → FF` | 25° | 5–7 | X non-drawing |
 | Simple bush | `F` | `F → FF+[+F-F-F]-[-F+F+F]` | 22.5° | 4–5 | F draws |
@@ -362,68 +269,42 @@ source of "curve comes out wrong"):
 | Symmetric bush | `F` | `F → F[+F]F[-F][F]` | 20° | 4–6 | F draws |
 | Three-way branch | `F` | `F → FF-[-F+F+F]+[+F-F-F]` | 22.5° | 4–5 | F draws |
 
-Angles 20–26° are the naturalistic band; below 15° reads as a broom, above 35°
-as a shrub. **Cheapest single aesthetic upgrade — stochastic rules + angle
-jitter:**
+Angles 20–26° are the naturalistic band; below 15° reads as a broom, above 35° as a shrub. **Cheapest single aesthetic upgrade — stochastic rules + angle jitter:**
 
 ```js
 rules = { F: [ {p: 0.34, to: 'F[+F]F[-F]F'}, {p: 0.33, to: 'F[+F]F'}, {p: 0.33, to: 'F[-F]F'} ] };
-// and per-turn: st.a += angle * (1 + random.range(-0.2, 0.2));
+// per turn: st.a += angle * (1 + random.range(-0.2, 0.2));
 ```
 
-Failure modes: string explosion (cap length ~2–5M chars); **scale is unknown
-until drawn** — run the turtle at step=1, measure the bbox, rescale to fit,
-never guess; guard `stack.pop()` against bracket imbalance; filter
-sub-pen-width segments at high iterations; and the #1 rendering bug: not
-splitting the path at `]` (spurious strokes across the drawing). Track
-`stack.length` for depth-based stroke width.
+Failure modes: string explosion (cap length ~2–5M chars); **scale unknown until drawn** — run at step=1, measure the bbox, rescale to fit, never guess; guard `stack.pop()` against bracket imbalance; filter sub-pen-width segments at high iterations; and the #1 rendering bug: not splitting the path at `]` (spurious strokes across the drawing). Track `stack.length` for depth-based stroke width.
 
-Composition tip: one large plant off-center beats a row of plants; give the
-canvas margin room for the crown by measuring the bbox after a dry run.
+Composition tip: one large plant off-center beats a row of plants; leave margin room for the crown by measuring the bbox in a dry run.
 
 ## 9. Voronoi / Delaunay
 
 ```js
 const delaunay = lib.delaunay.Delaunay.from(points);   // or .from(objs, fx, fy)
 const voronoi  = delaunay.voronoi([0, 0, W, H]);       // bounds REQUIRED
-voronoi.cellPolygon(i);   // closed [[x,y],...] or null — for filled cells
-voronoi.render();         // one path string, shared edges drawn ONCE — line art
-delaunay.triangles;       // flat Uint32Array, 3 indices per triangle — mesh art
-delaunay.neighbors(i);    // adjacent point indices
-delaunay.find(x, y, hint);// nearest input point; hint makes raster scans fast
+voronoi.cellPolygon(i);    // closed [[x,y],...] or null — filled cells
+voronoi.render();          // one path string, shared edges drawn ONCE — line art
+delaunay.triangles;        // flat Uint32Array, 3 indices per triangle — mesh art
+delaunay.neighbors(i);     // adjacent point indices
+delaunay.find(x, y, hint); // nearest input point; hint makes raster scans fast
 ```
 
 Recipes:
-- **Shattered glass:** radially non-uniform points around an impact point —
-  `r = Math.pow(random.range(0,1), 2.2) * maxR` (exponent 1.5–3), angle
-  uniform. Fill lightness = f(distance) + 3–8% jitter; **shrink each cell 1–3%
-  toward its centroid** to open hairline crack seams (this is what sells it).
-- **Organic cells:** poisson-disc input points, then round each cellPolygon
-  with Chaikin (2 iters, closed) — soft biological tissue.
-- **Lloyd relaxation** — iteration count is the aesthetic dial: 0 raw, 1–2
-  organic sweet spot, 5–10 honeycomb-ish, 50+ boring hex lattice. Use the
-  shoelace-weighted polygon centroid, not the vertex mean (vertex mean biases
-  relaxation).
-- **Low-poly triangles:** fill each Delaunay triangle with a color sampled at
-  its centroid; overlap ~0.5px or `shape-rendering="crispEdges"` to kill
-  antialiasing seams between adjacent fills.
-- **Euclidean MST** is a subgraph of the Delaunay triangulation (exact): pull
-  edges from `delaunay.triangles`, Kruskal with union-find — neural webs over
-  blue-noise points, river deltas over clustered points; stroke-width by depth
-  from root.
-- **Weighted Voronoi stippling** (Secord 2002): Lloyd with an image's
-  `1 - luminance` as density weight; ownership by raster scan with
-  `delaunay.find(x, y, hint)`; n 2k–5k for a portrait, 30–60 iterations;
-  variable dot radius `r = rMin + (rMax-rMin)*sqrt(w/maxW)` sells it.
+- **Shattered glass:** radially non-uniform points around an impact point — `r = Math.pow(random.range(0,1), 2.2) * maxR` (exponent 1.5–3, higher = tighter core), angle uniform. Fill lightness = f(distance) + 3–8% jitter; **shrink each cell 1–3% toward its centroid** to open hairline crack seams (this is what sells it).
+- **Organic cells:** poisson-disc input points, then round each cellPolygon with Chaikin (2 iters, closed) — soft biological tissue.
+- **Lloyd relaxation** — iteration count is the aesthetic dial: 0 raw variety, 1–2 organic sweet spot, 5–10 honeycomb-ish, 50+ boring hex lattice. Use the shoelace-weighted polygon centroid, not the vertex mean (vertex mean biases relaxation).
+- **Low-poly triangles:** fill each Delaunay triangle with a color sampled at its centroid; overlap ~0.5px or use `shape-rendering="crispEdges"` to kill antialiasing seams between adjacent fills.
+- **Euclidean MST** is a subgraph of the Delaunay triangulation (exact, not approximate): pull unique edges from `delaunay.triangles`, sort by length, Kruskal with union-find — O(n log n). Neural webs over blue-noise points; river deltas over clustered points; stroke-width by depth from root; Catmull-Rom through midpoints for vines.
+- **Weighted Voronoi stippling** (Secord 2002): Lloyd's algorithm with an image's `1 - luminance` as density weight — move each point to the density-weighted centroid of its cell, iterate. Cell ownership by raster scan with `delaunay.find(x, y, hint)`, accumulating weighted sums per cell; reseed starved cells randomly. n 2k–5k for a portrait, 30–60 iterations; variable dot radius `r = rMin + (rMax-rMin)*Math.sqrt(w/maxW)` (rMin 0.4, rMax 2.0) sells it.
 
-Composition tip: point distribution is the composition — the Voronoi diagram
-only reveals it. Design the points first (clustered, ramped, poisson).
+Composition tip: the point distribution is the composition — the Voronoi diagram only reveals it. Design the points first (clustered, ramped, poisson).
 
 ## 10. Curve smoothing
 
-**Chaikin corner cutting** — limit curve is a quadratic B-spline: C¹, stays
-inside the polygon hull, never overshoots. Use for contours, cells, blobs —
-anywhere only the overall shape matters.
+**Chaikin corner cutting** — limit curve is a quadratic B-spline: C¹, stays inside the polygon hull, never overshoots. Use where only the overall shape matters: contours, cells, blobs.
 
 ```js
 function chaikin(pts, iters = 3, closed = false) {
@@ -442,37 +323,22 @@ function chaikin(pts, iters = 3, closed = false) {
 }
 ```
 
-Point count doubles per iteration: 1 = clipped corners, 2 = smooth at normal
-stroke widths, 3–4 = fully smooth (practical max). Closed rings shrink
-~1.5%/iteration — rescale about the centroid if area matters.
+Point count doubles per iteration: 1 = clipped corners, 2 = smooth at normal stroke widths, 3–4 = fully smooth (practical max). Closed rings shrink ~1.5%/iteration — rescale about the centroid if area matters.
 
-**Catmull-Rom → cubic bezier** — *interpolates* (points are meaningful
-waypoints: flow traces, walk paths, displaced lines). Uniform form:
-`B1 = P1 + (P2−P0)/6`, `B2 = P2 − (P3−P1)/6`. **Use the centripetal variant
-(α = 0.5) for art** — provably no cusps/self-intersections with uneven
-spacing. Easiest route in this bag:
+**Catmull-Rom → cubic bezier** — *interpolates* (points are meaningful waypoints: flow traces, walks, displaced lines). Uniform form: `B1 = P1 + (P2−P0)/6`, `B2 = P2 − (P3−P1)/6`, endpoints B0=P1, B3=P2. **Use the centripetal variant (α = 0.5) for art** — provably no cusps or self-intersections with uneven spacing. Easiest route in this bag:
 
 ```js
-const path = lib.shape.line()
-  .curve(lib.shape.curveCatmullRom.alpha(0.5))(pts);   // → d attribute string
+const d = lib.shape.line()
+  .curve(lib.shape.curveCatmullRom.alpha(0.5))(pts);   // → path d string
 // closed: lib.shape.curveCatmullRomClosed.alpha(0.5)
 // Chaikin-like approximation: lib.shape.curveBasis / curveBasisClosed
 ```
 
-[unverified]: hand-rolled non-uniform tangent scaling has several
-equivalent-but-differently-scaled published forms — if you roll your own,
-render a test path with uneven spacing and check for cusps; guard coincident
-points (NaN). Choosing: Catmull-Rom interpolates, Chaikin/B-spline
-approximates. For metaball/blob outlines prefer Chaikin — Catmull-Rom
-overshoots at merge necks (pinch artifact).
+[unverified]: hand-rolled non-uniform tangent scaling has several equivalent-but-differently-scaled published forms — if rolling your own, render a test path with uneven spacing and check for cusps; guard coincident points (NaN). Choosing: Catmull-Rom interpolates, Chaikin/B-spline approximates. For metaball/blob outlines prefer Chaikin — Catmull-Rom overshoots at merge necks (pinch artifact).
 
 ## 11. Space colonization (Runions et al. 2007) — and DLA
 
-Convincing trees and leaf venation — branching responds to available space;
-the crown fills whatever region you seed with attractors. Per iteration: each
-attractor pulls its single nearest node within influence radius `d_i`; each
-pulled node grows one child of length `D` toward the average pull direction;
-attractors within kill radius `d_k` of any node are consumed.
+Convincing trees and leaf venation — branching responds to available space; the crown fills whatever region you seed with attractors. Per iteration: each attractor pulls its single nearest node within influence radius `d_i`; each pulled node grows one child of length `D` toward the average pull direction; attractors within kill radius `d_k` of any node are consumed.
 
 ```js
 let nodes = [root];
@@ -507,44 +373,26 @@ for (let it = 0; it < MAX && attractors.length; it++) {
 | tropism | 0–0.3 magnitude | constant bias (gravity/light) |
 | jitter | 0–0.15 | breaks degenerate symmetric forks |
 
-[unverified]: Runions' exact recommended multiples. Branch thickness: da Vinci
-rule `r_parent^n = Σ r_child^n`, n ≈ 2–3, assigned by post-order traversal
-from `r_min` leaves. Render the parent-pointer tree as edge-disjoint
-leaf-to-root chains:
+[unverified]: Runions' exact recommended multiples. Branch thickness: da Vinci rule `r_parent^n = Σ r_child^n`, n ≈ 2–3, assigned by post-order traversal from `r_min` leaves. Render the parent-pointer tree as edge-disjoint leaf-to-root chains:
 
 ```js
-function treeStrokes(particles) {
-  const visited = new Set(), hasChild = new Set();
-  for (const p of particles) if (p.parent) hasChild.add(p.parent);
-  const strokes = [];
-  for (const leaf of particles.filter(p => !hasChild.has(p))) {
-    const chain = []; let c = leaf;
-    while (c && !visited.has(c)) { visited.add(c); chain.push(c); c = c.parent; }
-    if (c) chain.push(c);                        // join to already-drawn trunk
-    if (chain.length > 1) strokes.push(polyPath(chain));
-  }
-  return strokes;
+const hasChild = new Set(nodes.filter(p => p.parent).map(p => p.parent));
+const visited = new Set(), strokes = [];
+for (const leaf of nodes.filter(p => !hasChild.has(p))) {
+  const chain = []; let c = leaf;
+  while (c && !visited.has(c)) { visited.add(c); chain.push(c); c = c.parent; }
+  if (c) chain.push(c);                          // join to already-drawn trunk
+  if (chain.length > 1) strokes.push(polyPath(chain));
 }
 ```
 
-**The alternative — DLA** (diffusion-limited aggregation): random walkers stick
-to a growing cluster → coral/frost/Lichtenberg dendrites, fractal dimension
-≈ 1.71. Slower and less controllable than space colonization (which shapes its
-crown directly via the attractor region), and its practical accelerations
-(spawn-on-circle + adaptive walk-on-spheres step + spatial hash) carry
-[unverified] justification details in the source. If you want DLA's specific
-wispy look: stickiness 1.0 = dendrites, 0.05–0.2 = dense cauliflower; snap
-each particle to tangency with the particle it hit; render with the same
-leaf-to-root chain code above.
+**The alternative — DLA** (diffusion-limited aggregation): random walkers stick to a growing cluster → coral/frost/Lichtenberg dendrites, fractal dimension ≈ 1.71 in 2D. Less controllable than space colonization (which shapes its crown directly via the attractor region), and its practical accelerations (spawn-on-circle + adaptive walk-on-spheres step + spatial hash) carry [unverified] justification details in the source. If you want its specific wispy look: stickiness is the aesthetic dial (1.0 = wispy dendrites, 0.05–0.2 = dense cauliflower); spawn on a circle just outside the cluster, kill walkers beyond ~1.5–3× spawn radius; snap each particle to tangency with the particle it hit or you get mush; render with the same leaf-to-root chain code above.
 
-Composition tip: the attractor region IS the crown silhouette — seed
-attractors inside a designed blob (superellipse, noise-wobbled circle), not
-the whole canvas.
+Composition tip: the attractor region IS the crown silhouette — seed attractors inside a designed blob (superellipse, noise-wobbled circle), not the whole canvas.
 
 ## 12. Phyllotaxis (golden-angle spiral)
 
-Vogel's formula: sunflower-head packing — the densest natural-looking radial
-dot arrangement.
+Vogel's formula: sunflower-head packing — the densest natural-looking radial arrangement.
 
 ```js
 const GA = Math.PI * (3 - Math.sqrt(5));       // golden angle ≈ 137.507°
@@ -555,65 +403,40 @@ for (let i = 0; i < N; i++) {
 }
 ```
 
-N 200–3000; scale `c = targetRadius / Math.sqrt(N)`. Element size: constant =
-classic seed head; growing with i = sunflower; `size ∝ sqrt(i)` keeps visual
-density even. Any angle ≠ GA degrades into visible spiral arms — itself
-usable: GA ± 0.5° produces deliberate spiral-arm moiré. Replace dots with
-petals/polygons rotated along `a` for botanical looks.
+N 200–3000; scale `c = targetRadius / Math.sqrt(N)`. Element size: constant = classic seed head; growing with i = sunflower; `size ∝ sqrt(i)` keeps visual density even. Any angle ≠ GA degrades into visible spiral arms — itself usable: GA ± 0.5° produces deliberate spiral-arm moiré. Replace dots with petals/polygons rotated along `a` for botanical looks.
 
-Composition tip: phyllotaxis earns a dead-center placement — it is one of the
-few motifs where a centered radial composition is the strong choice (§16).
+Composition tip: phyllotaxis earns dead-center placement — one of the few motifs where a centered radial composition is the strong choice (center is only weak when accidental).
 
 ## 13. Random walks
 
-The art is entirely in the constraints — unbiased walks read as structureless
-fuzz.
+The art is entirely in the constraints — unbiased walks read as structureless fuzz.
 
 ```js
 // Momentum / correlated walk — the single most important fix:
 let a = random.range(0, 2*Math.PI);
 for (let i = 0; i < steps; i++) {
-  a += (noise2D(i * 0.01, walkerId * 7.3)) * TURN;   // noise-driven turning → C¹ curves
+  a += noise2D(i * 0.01, walkerId * 7.3) * TURN;     // noise-driven turning → C¹ curves
   x += Math.cos(a) * step; y += Math.sin(a) * step;  // step 1-5, TURN 0.05-0.3 for elegance
   pts.push([x, y]);
 }
 ```
 
-- **Lattice vs continuous:** 4/8-neighbor integer walks give circuit-board
-  aesthetics + trivial self-avoidance via a `Set`; continuous gives organic
-  filaments (self-avoidance needs a segment spatial hash). Hex lattice is an
-  underused middle ground.
-- **Self-avoiding walk:** choose among unoccupied neighbor cells; trapping is
-  intrinsic (naive SAW dies within a few hundred steps) — backtrack 5–20
-  levels, or restart and keep the longest run.
-- **Lévy flight:** `len = Math.min(stepMin * Math.pow(random.range(0,1), -1/ALPHA), stepMax)`,
-  ALPHA 1.2–2.0; clusters connected by rare long ligatures. The `stepMax`
-  clamp (5–20% of canvas) is essential. Render long jumps as pen-ups for
-  island clusters, or as lines for spidery webs.
-- **Boundaries, worst to best:** clamp (edge pile-up) < wrap (split the
-  polyline at the seam!) < reflect < **soft steering** (add a centering force
-  ∝ (dist/R)² so the walk curves away from edges — best-looking) <
-  kill-and-respawn.
+- **Lattice vs continuous:** 4/8-neighbor integer walks give circuit-board aesthetics + trivial self-avoidance via a `Set`; continuous gives organic filaments (self-avoidance needs a segment spatial hash). Hex lattice is an underused middle ground.
+- **Self-avoiding walk:** choose among unoccupied neighbor cells; trapping is intrinsic (naive SAW dies within a few hundred steps) — backtrack 5–20 levels, or restart and keep the longest run.
+- **Lévy flight:** `len = Math.min(stepMin * Math.pow(random.range(0,1), -1/ALPHA), stepMax)`, ALPHA 1.2–2.0; clusters connected by rare long ligatures. The `stepMax` clamp (5–20% of canvas) is essential. Render long jumps as pen-ups for island clusters, or as lines for spidery webs.
+- **Boundaries, worst to best:** clamp (edge pile-up) < wrap (split the polyline at the seam!) < reflect < **soft steering** (add a centering force ∝ (dist/R)² so the walk curves away from edges — best-looking) < kill-and-respawn.
 
-Reliable recipe: 20–200 walkers, noise-driven turning, soft-boundary steering,
-stroke opacity 0.05–0.15, **one shared noise field so walkers braid**, slight
-global drift.
+Reliable recipe: 20–200 walkers, noise-driven turning, soft-boundary steering, stroke opacity 0.05–0.15, **one shared noise field so walkers braid**, slight global drift.
 
-Composition tip: many faint walkers sharing one field reads as a coherent
-current; one bold walker reads as a drawing — pick one register, not both.
+Composition tip: many faint walkers sharing one field read as a coherent current; one bold walker reads as a drawing — pick one register, not both.
 
 ---
 
 ## 14. PALETTE CRAFT
 
-**How many colors.** 2–3 is the strongest default; 4–6 the sweet spot for
-layered work; beyond 6 reads as rainbow unless the colors form one ordered
-ramp. Structure: **1 background + 1 dominant + 1–2 supporting + 1 accent**.
+**How many colors.** 2–3 is the strongest default; 4–6 the sweet spot for layered work; beyond 6 reads as rainbow/accident unless the colors form one ordered ramp (a 12-stop ramp is ONE color decision). Structure: **1 background + 1 dominant + 1–2 supporting + 1 accent**.
 
-**Generate in OKLCH, not HSL.** HSL lightness is not perceptual (yellow vs
-blue at the same nominal L differ wildly), so HSL-hue-variation at fixed L is
-value-chaotic. OKLCH's L is perceptually uniform: fixing L fixes value;
-varying L is a real value ladder. Lightness ladder + bounded hue arc:
+**Generate in OKLCH, not HSL.** HSL lightness is not perceptual (yellow vs blue at equal nominal L differ wildly) — HSL hue-variation at fixed L is value-chaotic, the flatness failure. OKLCH's L is perceptually uniform: fixing L fixes value; varying L is a real value ladder. Lightness ladder + bounded hue arc:
 
 ```js
 function oklchPalette({ n = 5, hueCenter = random.range(0, 360), hueArc = 40,
@@ -642,106 +465,37 @@ Working ranges (practiced defaults, not published constants):
 | Near-monochrome | 0.20–0.95 | 0.02–0.06 | 5–12° |
 | Duotone | two clusters | 0.10–0.18 | two arcs 150–210° apart |
 
-Hard rules: **total L span < 0.35 = flat, always**; chroma > ~0.20 is out of
-sRGB gamut for many hues at extreme L — clamp with culori, never assume;
-yellows/greens (H 90–150) hold far less chroma at low L than blues/purples (H
-250–320) — scale `chromaPeak` down when sweeping through yellow. **Emit
-hex/rgb into SVG attributes**, not `oklch()` strings — headless rasterizers
-may not parse them [unverified current support].
+Hard rules: **total L span < 0.35 = flat, always**; chroma > ~0.20 is out of sRGB gamut for many hues at extreme L — clamp with culori (`clampChroma`), never assume; yellows/greens (H 90–150) hold far less chroma at low L than blues/purples (H 250–320) — scale `chromaPeak` down when sweeping through yellow. **Emit hex/rgb into SVG attributes**, not `oklch()` strings — headless rasterizers may not parse them [unverified current support].
 
-**Most reliable recipe — analogous + complement accent:** 3–4 analogous
-members spread ~24° apart around a base hue, L laddered 0.32→0.86, C ≈ 0.10;
-one accent at base + 150–210° (split-complement is safest), MID lightness
-(~0.60), chroma ×1.5, used sparingly. **The accent must differ in chroma AND
-value, not only hue** — a same-L accent is invisible.
+**Most reliable recipe — analogous + complement accent:** 3–4 analogous members spread ~24° apart around a base hue, L laddered 0.32→0.86, C ≈ 0.10; one accent at base + 150–210° (split-complement is safest, true complement punchiest), MID lightness (~0.60), chroma ×1.5, used sparingly. **The accent must differ in chroma AND value, not only hue** — a same-L accent is invisible; a same-C accent is just another family member.
 
-**Value structure over hue.** Squint test: if everything collapses to one
-grey, there is no structure. Value carries form; hue contrast resolves weakly.
-A 2-color piece with strong light/dark beats a 6-mid-tone piece every time.
-Retarget each member's L to even rungs on [lMin, lMax]. Area distribution
-(notan / 70-20-10): ~60–70% of area in one value zone, 20–30% secondary,
-5–10% accent/extreme. Health checks (heuristic thresholds): `lSpan >= 0.30`;
-at least one member ≥ 4.5:1 WCAG contrast vs background (the anchor);
-min adjacent ΔL ≥ 0.04 between touching fills or edges vibrate.
+**Value structure over hue.** Squint test: if everything collapses to one grey, there is no structure. Value carries form; hue contrast resolves weakly — a 2-color piece with strong light/dark beats a 6-mid-tone piece every time. Retarget each member's L to even rungs on [lMin, lMax] (keep hue+chroma). Area distribution (notan / 70-20-10): ~60–70% of area in one value zone, 20–30% secondary, 5–10% accent/extreme — uniform area across three value bands reads as noise. Health checks (heuristic thresholds): `lSpan >= 0.30` else flat; at least one member ≥ 4.5:1 WCAG contrast vs background (the anchor that draws structure); min adjacent ΔL ≥ 0.04 between touching fills or edges vibrate (unless vibration is wanted).
 
 **Assigning color to elements:**
-- Default: weighted random — dominant 0.50 / mid 0.25 / mid2 0.15 / dark 0.05
-  / accent 0.05. **Accent on 3–8% of elements or ≤10% of inked area** (below
-  2% reads as a mistake, above 15% becomes a second dominant).
-- Better: quota + shuffle — deterministic counts kill the "seed with zero
-  accents" failure class entirely.
-- **Spatially clustered accent beats scattered:** 1–3 accent seed points
-  (radius 8–22% of min dimension), nearby elements get accent with p ≈ 0.35.
-  Scattered = confetti; clustered = intent.
-- By field value: interpolate in Lab/OKLab, never RGB (mud through grey), and
-  **quantize the ramp to 3–6 bands** — continuous = mush, banded = shape.
-- Never `palette[i % n]` on a spatially ordered list (stripes) — shuffle the
-  index map per seed.
-- Micro-variation (separates "generated" from "made"): jitter every fill in
-  OKLCH — σ_L ≈ 0.02, σ_C ≈ 0.01, σ_H ≈ 3°; keep jitter an order of magnitude
-  below the ladder step.
+- Default: weighted random — dominant 0.50 / mid 0.25 / mid2 0.15 / dark 0.05 / accent 0.05. **Accent on 3–8% of elements or ≤10% of inked area** (below 2% reads as a mistake, above 15% becomes a second dominant).
+- Better: quota + shuffle — deterministic counts kill the "seed with zero accents" failure class entirely.
+- **Spatially clustered accent beats scattered:** 1–3 accent seed points (radius 8–22% of min dimension); elements near a seed get accent with p ≈ 0.35. Scattered = confetti; clustered = intent.
+- By field value: interpolate in Lab/OKLab, never RGB (mud through grey), and **quantize the ramp to 3–6 bands** — continuous = mush, banded = shape.
+- Never `palette[i % n]` on a spatially ordered list (stripes) — shuffle the index map per seed.
+- Micro-variation (separates "generated" from "made"): jitter every fill in OKLCH — σ_L ≈ 0.02, σ_C ≈ 0.01, σ_H ≈ 3°; keep jitter an order of magnitude below the ladder step. Also: overlapping shapes at fill-opacity 0.6–0.85, or `mix-blend-mode: multiply` on a group for the ink look.
 
-**Backgrounds — near-neutral, never pure.** `#fff` reads as "no decision",
-`#000` crushes darks; the tiny offset is most of what makes output look
-printed rather than screenshotted. Working near-neutrals (personal defaults,
-not canonical): warm `#F4F1EA` (general default), `#EFE9DD` cream, `#E8E4DA`
-bone, `#DCD6C8` kraft; cool `#F2F3F5`, `#E9EBEE`; darks `#14161A` cool
-off-black, `#1A1614` warm off-black, `#22252B` charcoal. Better: generate so
-the bg tracks the palette — hue borrowed from the dominant ± ~12°, **chroma
-0.004–0.020** (above ~0.03 the bg becomes a palette member), L 0.93–0.97
-light / 0.14–0.22 dark. Dark grounds need retuning: lMin +0.10, chromaPeak
-×1.2. Assert: bg ≥ 3:1 contrast vs at least one member, and **bg L outside
-the ladder's span** — a mid-ladder bg makes half the palette vanish.
+**Backgrounds — near-neutral, never pure.** `#fff` reads as "no decision"/unrendered; `#000` crushes dark shapes and halates; the tiny offset is most of what makes output look printed rather than screenshotted. Working near-neutrals (personal defaults, not canonical): warm `#F4F1EA` (general default), `#EFE9DD` cream, `#E8E4DA` bone, `#DCD6C8` kraft; cool `#F2F3F5`, `#E9EBEE`; darks `#14161A` cool off-black, `#1A1614` warm off-black, `#22252B` charcoal. Better: generate so the bg tracks the palette — hue borrowed from the dominant ± ~12°, **chroma 0.004–0.020** (above ~0.03 the bg becomes a palette member), L 0.93–0.97 light / 0.14–0.22 dark. Dark grounds need retuning: lMin +0.10, chromaPeak ×1.2. Assert: bg ≥ 3:1 contrast vs at least one member, and **bg L outside the ladder's span** — a mid-ladder bg makes half the palette vanish.
 
 ---
 
 ## 15. COMPOSITION RULES
 
-**Margins first.** Establish the frame before drawing anything; never draw
-outside it except deliberate bleed. As a fraction of the shorter side:
-0.04–0.06 tight/poster; **0.07–0.10 general default**; 0.12–0.18 gallery/mat.
-Asymmetric beats symmetric: `mTop = 0.9m, mSide = m, mBottom = 1.35m` —
-bottom-heavy optical centering (standard typographic practice; 1.35 is a
-working default).
+**Margins first.** Establish the frame before drawing anything; never draw outside it except deliberate bleed. As a fraction of the shorter side: 0.04–0.06 tight/poster; **0.07–0.10 general default**; 0.12–0.18 gallery/mat; 0 = full bleed, a distinct decision. Asymmetric beats symmetric: `mTop = 0.9m, mSide = m, mBottom = 1.35m` — bottom-heavy optical centering (standard typographic practice; 1.35 is a working default).
 
-**Focal point.** Uniform interest = no interest. Rule-of-thirds intersection +
-gaussian wobble (σ ≈ 4% of frame) so it's never mechanically on the line.
-Also good: deliberate dead center (only for radial/mandala/phyllotaxis work —
-center is only weak when accidental); off-canvas implied center (excellent
-for flow fields); **two-point tension** — large low-contrast mass at one
-third-point, small high-contrast accent diagonally opposite — the best
-default for "movement". Bias density, element scale, accent probability, and
-stroke weight toward the focal point with a gaussian falloff (σ ≈ 0.22 of the
-diagonal).
+**Focal point.** Uniform interest = no interest. Rule-of-thirds intersection + gaussian wobble (σ ≈ 4% of frame) so it's never mechanically on the line. Also good: deliberate dead center (only for radial/mandala/phyllotaxis work); off-canvas implied center (the piece becomes a fragment — excellent for flow fields); **two-point tension** — large low-contrast mass at one third-point, small high-contrast accent diagonally opposite — the best default for "movement"; true all-over uniformity is legit but must be *completely* uniform (near-uniform reads as failure). Bias density, element scale, accent probability, and stroke weight toward the focal point with gaussian falloff (σ ≈ 0.22 of the diagonal).
 
-**Density variation.** The most common generative failure is uniform density.
-Modulate existence with a very-low-frequency noise field (freq ~0.0015/px),
-gamma-sharpened (`Math.pow((n+1)/2, 1.8)`), plus the focal pull. Target ~4:1
-sparse-to-dense (<2:1 invisible, >10:1 needs justified blank zones). For
-points, variable-radius poisson-disc (§7) gives density variation with
-locally even spacing.
+**Density variation.** The most common generative failure is uniform density. Modulate existence with a very-low-frequency noise field (freq ~0.0015/px), gamma-sharpened (`Math.pow((n+1)/2, 1.8)`), plus the focal pull. Target ~4:1 sparse-to-dense (<2:1 invisible, >10:1 needs justified blank zones). For points, variable-radius poisson-disc (§7) gives density variation with locally even spacing.
 
-**Negative space is a shape — design it.** Reserve ≥ ~15% of canvas as one
-contiguous empty region: carve 1–2 void blobs (circle/superellipse with a
-noise-wobbled edge, `r * (0.85 + 0.3 * (noise2D(...)+1)/2)`), reject elements
-whose centroid falls inside. Voids should be **off-center and open onto an
-edge/margin** — a floating central hole reads as a mistake. The inverse
-(dense island in sparse field) is equally valid and often stronger.
+**Negative space is a shape — design it.** Reserve ≥ ~15% of canvas as one contiguous empty region: carve 1–2 void blobs (circle/superellipse with a noise-wobbled edge, `r * (0.85 + 0.3 * (noise2D(...)+1)/2)` so it doesn't read as a stamped circle), reject elements whose centroid falls inside. Voids should be **off-center and open onto an edge/margin** — a floating central hole reads as a mistake. The inverse (dense island in sparse field) is equally valid and often stronger.
 
-**Gaussian vs uniform.** Uniform jitter reads as mechanical rubble (right for
-Schotter-style order-to-chaos ramps); gaussian reads as hand wobble. Clamp
-gaussian tails (e.g. ±2σ) — one 4σ outlier ruins a composed piece. Power-law
-distributions for sizes and lengths (many small, few large) beat uniform
-nearly everywhere: circle radii, flow-trace lengths, subdivision depths.
+**Gaussian vs uniform.** Uniform jitter reads as mechanical rubble (right for Schotter-style order-to-chaos ramps); gaussian reads as hand wobble. Clamp gaussian tails (e.g. ±2σ) — one 4σ outlier ruins a composed piece. Power-law sizes and lengths (many small, few large) beat uniform nearly everywhere: circle radii, flow-trace lengths, subdivision depths.
 
-**Order with a wobble** — the central aesthetic of the field (Vera Molnár
-lineage; her exact titles/"1% disorder" figure [unverified]): impose rigid
-structure, perturb by a small bounded amount. Magnitudes: position σ =
-0.02–0.15 × cell (a grid stops reading as a grid above ~0.4); rotation σ =
-1–8° hand-drawn / 15–30° energetic; scale σ = 3–12%. **Ramp the wobble**
-across the canvas (linear, radial, or noise) — constant wobble reads as
-sloppiness; a gradient of wobble reads as intent and IS the composition. The
-template (Georg Nees, "Schotter", c. 1968 [unverified] exact date):
+**Order with a wobble** — the central aesthetic of the field (Vera Molnár lineage; her exact titles / "1% disorder" figure [unverified]): impose rigid structure, perturb by a small bounded amount. Magnitudes: position σ = 0.02–0.15 × cell (a grid stops reading as a grid above ~0.4); rotation σ = 1–8° hand-drawn / 15–30° energetic; scale σ = 3–12%. **Ramp the wobble** across the canvas (linear, quadratic, radial, or noise) — constant wobble reads as sloppiness; a gradient of wobble reads as intent and IS the composition. The template (Georg Nees, "Schotter", c. 1968 [unverified] exact date; uniform jitter matches the original's character [unverified]):
 
 ```js
 for (let j = 0; j < rows; j++) for (let i = 0; i < cols; i++) {
@@ -753,28 +507,8 @@ for (let j = 0; j < rows; j++) for (let i = 0; i < cols; i++) {
 }
 ```
 
-**Largest shapes first.** SVG document order is paint order: sort by area
-descending; big value-masses first, details on top. Assign the
-darkest/highest-contrast colors to the smaller, later shapes. Structure into
-named groups (`bg / masses / mid / detail / accent`); for stroke work, group
-by color.
+**Largest shapes first.** SVG document order is paint order: sort by area descending; big value-masses first, details land on top. Assign the darkest/highest-contrast colors to the *smaller, later* shapes — large dark masses dominate, small dark marks punctuate. Structure into named groups (`bg / masses / mid / detail / accent`); for stroke work, group by color.
 
-**Edge treatment — one binary decision per piece; mixed looks like a bug.**
-Contain: reject/shrink anything crossing the frame (but keep placing elements
-*near* the edge, and inset by stroke-width/2). Bleed: generate over a region
-10–20% larger than the canvas, clip with `clip-path`; elements must be
-genuinely cut, not suspiciously terminating at the border. Hybrid (most
-reliable): background bleeds full canvas, marks contained inside the margin —
-the "print" look.
+**Edge treatment — one binary decision per piece; mixed treatment looks like a bug.** Contain: reject/shrink anything crossing the frame; reads composed/object-like; keep placing elements *near* the edge to avoid center-hugging; inset by stroke-width/2 (ink extends half the stroke past geometry). Bleed: generate over a region 10–20% larger than the canvas, clip with `clip-path`; reads infinite/sample-of-a-system; elements must be genuinely cut, not suspiciously terminating at the border. Hybrid (most reliable): background bleeds full canvas, marks contained inside the margin — the "print" look.
 
-**Seeded reproducibility — non-negotiable discipline.** Same (code, seed) →
-same art, always. Every random draw goes through the seeded `random.*` /
-seeded noise — no `Math.random()`, ever, anywhere (one stray call breaks
-reproducibility silently). Pass the seeded rng into noise construction too.
-Record the seed in the SVG (e.g. a comment or `data-seed` attribute).
-**Explore by seed sweep, tune by parameter change:** render 10–20 seeds at
-fixed params to judge the parameter space (the piece is the space, not one
-lucky seed — if most seeds are bad, fix the params, don't cherry-pick), and
-change one parameter at a time at a fixed seed to see its effect. Derive
-per-subsystem seeds from the master seed (e.g. `hash(seed, "palette")`) so
-adding a draw in one subsystem doesn't reshuffle every other subsystem.
+**Seeded reproducibility — non-negotiable discipline.** Same (code, seed) → same art, always. Every random draw goes through the seeded `random.*` / seeded noise — no `Math.random()`, ever, anywhere (one stray call breaks reproducibility silently); pass the seeded rng into noise construction too. Record the seed in the SVG (comment or `data-seed` attribute). **Explore by seed sweep, tune by parameter change:** render 10–20 seeds at fixed params to judge the parameter space — the piece is the space, not one lucky seed; if most seeds are bad, fix the params, don't cherry-pick. Change one parameter at a time at a fixed seed to see its effect. Derive per-subsystem seeds from the master seed (e.g. `hash(seed, "palette")`) so adding a draw in one subsystem doesn't reshuffle every other subsystem.
